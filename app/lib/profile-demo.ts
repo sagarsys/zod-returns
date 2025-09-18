@@ -1,6 +1,6 @@
 // Demo functions showing how to use the profile API
 import { profileApi } from './api';
-import { Profile, UpdateProfileRequest } from '@/app/types/profile';
+import { Profile } from '@/app/types/profile';
 
 // Example: Load profile data on component mount
 export async function loadProfileData(): Promise<Profile | null> {
@@ -18,27 +18,13 @@ export async function loadProfileData(): Promise<Profile | null> {
 export async function updateProfileData(formData: {
   name: string;
   email: string;
-  profileImage?: string | File | null;
+  profileImage?: File | null;
 }): Promise<Profile | null> {
   try {
-    // Convert File to URL if it's a file upload
-    let profileImageUrl: string | null = null;
-    
-    if (formData.profileImage) {
-      if (typeof formData.profileImage === 'string') {
-        // It's already a URL
-        profileImageUrl = formData.profileImage;
-      } else if (formData.profileImage instanceof File) {
-        // It's a file - in a real app, you'd upload this to a file storage service
-        // For demo purposes, we'll create a data URL
-        profileImageUrl = URL.createObjectURL(formData.profileImage);
-      }
-    }
-
-    const updateData: UpdateProfileRequest = {
+    const updateData = {
       name: formData.name,
       email: formData.email,
-      profileImage: profileImageUrl,
+      profileImage: formData.profileImage,
     };
 
     const updatedProfile = await profileApi.updateProfile(updateData);
@@ -51,10 +37,10 @@ export async function updateProfileData(formData: {
 }
 
 // Example: Partial update (e.g., just the profile image)
-export async function updateProfileImage(imageUrl: string): Promise<Profile | null> {
+export async function updateProfileImage(imageFile: File): Promise<Profile | null> {
   try {
     const updatedProfile = await profileApi.patchProfile({
-      profileImage: imageUrl,
+      profileImage: imageFile,
     });
     console.log('Updated profile image:', updatedProfile);
     return updatedProfile;
@@ -86,7 +72,7 @@ export async function testApiEndpoints() {
     const updatedProfile = await profileApi.updateProfile({
       name: 'John Doe',
       email: 'john.doe@example.com',
-      profileImage: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face',
+      profileImage: null, // No file upload in test
     });
     console.log('✅ PUT successful:', updatedProfile);
     

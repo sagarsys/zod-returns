@@ -1,141 +1,23 @@
 'use client';
 
-import { useForm } from 'react-hook-form';
-import { useState, useRef, useEffect } from 'react';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import Image from 'next/image';
-import { profileApi } from '@/app/lib/api';
-import { Profile } from '@/app/types/profile';
-
-// Zod schema for form validation
-const profileSchema = z.object({
-  name: z
-    .string()
-    .min(2, 'Name must be at least 2 characters')
-    .max(50, 'Name must be less than 50 characters')
-    .regex(/^[a-zA-Z\s]+$/, 'Name can only contain letters and spaces'),
-  email: z
-    .string()
-    .min(1, 'Email is required')
-    .email('Please enter a valid email address')
-    .max(100, 'Email must be less than 100 characters'),
-  profileImage: z
-    .instanceof(File)
-    .refine(
-      (file) => file.size <= 5 * 1024 * 1024, // 5MB max
-      'Image must be less than 5MB'
-    )
-    .refine(
-      (file) => ['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(file.type),
-      'Image must be JPEG, PNG, GIF, or WebP'
-    )
-    .optional()
-    .nullable(),
-});
-
-type ProfileFormData = z.infer<typeof profileSchema>;
+import { useProfileForm } from '@/app/hooks/useProfileForm';
 
 export default function ProfileForm() {
-  const [isSubmitted, setIsSubmitted] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [profileData, setProfileData] = useState<Profile | null>(null);
-  const [profileImageFile, setProfileImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  
-  const { register, handleSubmit, formState: { errors }, setValue } = useForm<ProfileFormData>({
-    resolver: zodResolver(profileSchema),
-    mode: 'onChange', // Validate on change for better UX
-  });
-
-  // Load initial profile data
-  useEffect(() => {
-    const loadProfile = async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
-        const profile = await profileApi.getProfile();
-        setProfileData(profile);
-        
-        // Set form values
-        setValue('name', profile.name);
-        setValue('email', profile.email);
-        
-        // Set image preview if profile has an image
-        if (profile.profileImage) {
-          setImagePreview(profile.profileImage);
-        }
-      } catch (err) {
-        setError('Failed to load profile data');
-        console.error('Error loading profile:', err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadProfile();
-  }, [setValue]);
-
-  // Handle file upload
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setProfileImageFile(file);
-      setValue('profileImage', file);
-      
-      // Create preview URL for the new file
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setImagePreview(e.target?.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  // Remove image
-  const removeImage = () => {
-    setProfileImageFile(null);
-    setValue('profileImage', null);
-    setImagePreview(profileData?.profileImage || null); // Reset to original image or null
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
-
-  const onSubmit = async (data: ProfileFormData) => {
-    try {
-      setIsSubmitting(true);
-      setError(null);
-      
-      const updatedProfile = await profileApi.updateProfile({
-        name: data.name,
-        email: data.email,
-        profileImage: profileImageFile,
-      });
-      
-      // Update local state with the response
-      setProfileData(updatedProfile);
-      setImagePreview(updatedProfile.profileImage || null);
-      setProfileImageFile(null); // Clear the file since it's now uploaded
-      
-      // Reset file input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-      
-      setIsSubmitted(true);
-      // Reset success message after 3 seconds
-      setTimeout(() => setIsSubmitted(false), 3000);
-    } catch (err) {
-      setError('Failed to update profile. Please try again.');
-      console.error('Error updating profile:', err);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+  const {
+    register,
+    handleSubmit,
+    errors,
+    isSubmitted,
+    isLoading,
+    isSubmitting,
+    profileImageFile,
+    imagePreview,
+    error,
+    fileInputRef,
+    handleFileUpload,
+    removeImage,
+  } = useProfileForm();
 
   return (
     <div className="min-h-screen relative flex items-center justify-center p-4">
@@ -177,7 +59,7 @@ export default function ProfileForm() {
               <p className="text-white text-lg font-medium">Profile updated successfully!</p>
             </div>
           ) : (
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+            <form onSubmit={handleSubmit} className="space-y-6">
               {/* Error Display */}
               {error && (
                 <div className="bg-red-500/20 border border-red-500/30 rounded-lg p-4">
