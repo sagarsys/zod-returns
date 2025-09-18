@@ -2,15 +2,31 @@
 
 import { useForm } from 'react-hook-form';
 import { useState } from 'react';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 
-interface ProfileFormData {
-  name: string;
-  email: string;
-}
+// Zod schema for form validation
+const profileSchema = z.object({
+  name: z
+    .string()
+    .min(2, 'Name must be at least 2 characters')
+    .max(50, 'Name must be less than 50 characters')
+    .regex(/^[a-zA-Z\s]+$/, 'Name can only contain letters and spaces'),
+  email: z
+    .string()
+    .min(1, 'Email is required')
+    .email('Please enter a valid email address')
+    .max(100, 'Email must be less than 100 characters'),
+});
+
+type ProfileFormData = z.infer<typeof profileSchema>;
 
 export default function ProfileForm() {
   const [isSubmitted, setIsSubmitted] = useState(false);
-  const { register, handleSubmit, formState: { errors } } = useForm<ProfileFormData>();
+  const { register, handleSubmit, formState: { errors } } = useForm<ProfileFormData>({
+    resolver: zodResolver(profileSchema),
+    mode: 'onChange', // Validate on change for better UX
+  });
 
   const onSubmit = (data: ProfileFormData) => {
     console.log('Profile data:', data);
@@ -57,13 +73,7 @@ export default function ProfileForm() {
                   Name
                 </label>
                 <input
-                  {...register('name', { 
-                    required: 'Name is required',
-                    minLength: {
-                      value: 2,
-                      message: 'Name must be at least 2 characters'
-                    }
-                  })}
+                  {...register('name')}
                   type="text"
                   id="name"
                   className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-white/30 focus:border-transparent backdrop-blur-sm transition-all duration-200"
@@ -80,13 +90,7 @@ export default function ProfileForm() {
                   Email
                 </label>
                 <input
-                  {...register('email', { 
-                    required: 'Email is required',
-                    pattern: {
-                      value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                      message: 'Invalid email address'
-                    }
-                  })}
+                  {...register('email')}
                   type="email"
                   id="email"
                   className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-white/30 focus:border-transparent backdrop-blur-sm transition-all duration-200"
