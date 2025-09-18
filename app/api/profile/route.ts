@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Profile, ApiResponse, UpdateProfileRequest } from '@/app/types/profile';
+import { Profile, ApiResponse, UpdateProfileRequest, profileApiSchema } from '@/app/types/profile';
+import { ZodIssue } from 'zod';
 
 // Mock profile data
 const mockProfile: Profile = {
@@ -45,25 +46,39 @@ export async function PUT(request: NextRequest) {
     // Simulate API delay
     await new Promise(resolve => setTimeout(resolve, 800));
     
-    // Validate required fields
-    if (!name || !email) {
+    // Validate data with Zod schema
+    const validationResult = profileApiSchema.safeParse({
+      name,
+      email,
+      profileImage: profileImageFile,
+    });
+    
+    if (!validationResult.success) {
+      const errors = validationResult.error.issues.map((err: ZodIssue) => ({
+        field: err.path.join('.'),
+        message: err.message,
+      }));
+      
       return NextResponse.json<ApiResponse<never>>(
         { 
           success: false, 
-          error: 'Name and email are required' 
+          error: 'Validation failed',
+          details: errors
         },
         { status: 400 }
       );
     }
     
+    const { name: validatedName, email: validatedEmail, profileImage: validatedImage } = validationResult.data;
+    
     // Handle profile image file upload
     let profileImageUrl: string | null = mockProfile.profileImage || null;
     
-    if (profileImageFile && profileImageFile.size > 0) {
+    if (validatedImage && validatedImage.size > 0) {
       // In a real app, you would upload the file to a storage service (AWS S3, Cloudinary, etc.)
       // For demo purposes, we'll simulate converting the file to a URL
       profileImageUrl = `https://bonzai.iodigital.com/images/677fa8df0ca13e1b58cf4fa1/7897fe5c-439f-4aa4-b9cb-e23194141346-image_edit_oai_toolu_vrtx_01NEhvsUbjyjHcP5SMydthqK_img_O1UX8392L40STniGkvHsp.png`;
-    } else if (profileImageFile === null) {
+    } else if (validatedImage === null) {
       // Explicitly set to null if no file provided
       profileImageUrl = null;
     }
@@ -71,8 +86,8 @@ export async function PUT(request: NextRequest) {
     // Update mock profile with new data
     const updatedProfile: Profile = {
       ...mockProfile,
-      name,
-      email,
+      name: validatedName,
+      email: validatedEmail,
       profileImage: profileImageUrl,
       updatedAt: new Date().toISOString()
     };
@@ -105,12 +120,34 @@ export async function PATCH(request: NextRequest) {
     // Simulate API delay
     await new Promise(resolve => setTimeout(resolve, 600));
     
+    // Validate partial data with Zod schema (partial validation)
+    const partialSchema = profileApiSchema.partial();
+    const validationResult = partialSchema.safeParse(body);
+    
+    if (!validationResult.success) {
+      const errors = validationResult.error.issues.map((err: ZodIssue) => ({
+        field: err.path.join('.'),
+        message: err.message,
+      }));
+      
+      return NextResponse.json<ApiResponse<never>>(
+        { 
+          success: false, 
+          error: 'Validation failed',
+          details: errors
+        },
+        { status: 400 }
+      );
+    }
+    
+    const validatedData = validationResult.data;
+    
     // Update only provided fields
     const updatedProfile: Profile = {
       ...mockProfile,
-      name: body.name || mockProfile.name,
-      email: body.email || mockProfile.email,
-      profileImage: body.profileImage ? mockProfile.profileImage : mockProfile.profileImage,
+      name: validatedData.name || mockProfile.name,
+      email: validatedData.email || mockProfile.email,
+      profileImage: validatedData.profileImage ? mockProfile.profileImage : mockProfile.profileImage,
       updatedAt: new Date().toISOString()
     };
     

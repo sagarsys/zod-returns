@@ -125,6 +125,25 @@ const updateData = await updateResponse.json();
 
 All endpoints return consistent error responses:
 
+### Validation Errors
+```json
+{
+  "success": false,
+  "error": "Validation failed",
+  "details": [
+    {
+      "field": "name",
+      "message": "Name must be at least 2 characters"
+    },
+    {
+      "field": "email", 
+      "message": "Please enter a valid email address"
+    }
+  ]
+}
+```
+
+### General Errors
 ```json
 {
   "success": false,
@@ -136,6 +155,27 @@ Common HTTP status codes:
 - `200` - Success
 - `400` - Bad Request (validation errors)
 - `500` - Internal Server Error
+
+## Validation Rules
+
+The API validates all incoming data using Zod schemas. The API schema extends the base form schema to handle FormData-specific requirements:
+
+### Name Field
+- Required
+- Minimum 2 characters
+- Maximum 50 characters
+- Only letters and spaces allowed
+
+### Email Field
+- Required
+- Valid email format
+- Maximum 100 characters
+
+### Profile Image Field
+- Optional (nullable)
+- If provided, must be a File object
+- Maximum size: 5MB
+- Allowed types: JPEG, PNG, GIF, WebP
 
 ## Testing the API
 

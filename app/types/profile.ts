@@ -42,6 +42,10 @@ export interface ApiResponse<T> {
   data?: T;
   error?: string;
   message?: string;
+  details?: Array<{
+    field: string;
+    message: string;
+  }>;
 }
 
 // Profile update request types
@@ -53,3 +57,11 @@ export interface UpdateProfileRequest {
 
 // Profile form data type (inferred from Zod schema)
 export type ProfileFormData = z.infer<typeof profileSchema>;
+
+// API validation schema for FormData - extends the base schema
+export const profileApiSchema = profileSchema.extend({
+  profileImage: profileSchema.shape.profileImage.or(z.literal('')), // Allow empty string from FormData
+});
+
+// API request data type
+export type ProfileApiData = z.infer<typeof profileApiSchema>;
