@@ -4,8 +4,8 @@ import { Profile, ApiResponse, UpdateProfileRequest } from '@/app/types/profile'
 // Mock profile data
 const mockProfile: Profile = {
   id: '1',
-  name: 'John Doe',
-  email: 'john.doe@example.com',
+  name: 'Clark Kent',
+  email: 'clark.kent@example.com',
   profileImage: 'https://bonzai.iodigital.com/images/677fa8df0ca13e1b58cf4fa1/3f1ed94f-f25e-40af-816d-a4f1d002bb73-image_edit_oai_toolu_vrtx_01DoXseZ1k5EtUSXJSH7szgM_img_3Lgy22kc53A-XgVlDFLo6.png',
   createdAt: '2024-01-15T10:30:00Z',
   updatedAt: '2024-01-20T14:45:00Z'
