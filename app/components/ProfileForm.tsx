@@ -1,9 +1,12 @@
 'use client';
 
 import { useForm } from 'react-hook-form';
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import Image from 'next/image';
+import { profileApi } from '@/app/lib/api';
+import { Profile } from '@/app/types/profile';
 
 // Zod schema for form validation
 const profileSchema = z.object({
@@ -17,22 +20,121 @@ const profileSchema = z.object({
     .min(1, 'Email is required')
     .email('Please enter a valid email address')
     .max(100, 'Email must be less than 100 characters'),
+  profileImage: z
+    .instanceof(File)
+    .refine(
+      (file) => file.size <= 5 * 1024 * 1024, // 5MB max
+      'Image must be less than 5MB'
+    )
+    .refine(
+      (file) => ['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(file.type),
+      'Image must be JPEG, PNG, GIF, or WebP'
+    )
+    .optional()
+    .nullable(),
 });
 
 type ProfileFormData = z.infer<typeof profileSchema>;
 
 export default function ProfileForm() {
   const [isSubmitted, setIsSubmitted] = useState(false);
-  const { register, handleSubmit, formState: { errors } } = useForm<ProfileFormData>({
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [profileData, setProfileData] = useState<Profile | null>(null);
+  const [profileImageFile, setProfileImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  const { register, handleSubmit, formState: { errors }, setValue } = useForm<ProfileFormData>({
     resolver: zodResolver(profileSchema),
     mode: 'onChange', // Validate on change for better UX
   });
 
-  const onSubmit = (data: ProfileFormData) => {
-    console.log('Profile data:', data);
-    setIsSubmitted(true);
-    // Reset form after 2 seconds
-    setTimeout(() => setIsSubmitted(false), 2000);
+  // Load initial profile data
+  useEffect(() => {
+    const loadProfile = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        const profile = await profileApi.getProfile();
+        setProfileData(profile);
+        
+        // Set form values
+        setValue('name', profile.name);
+        setValue('email', profile.email);
+        
+        // Set image preview if profile has an image
+        if (profile.profileImage) {
+          setImagePreview(profile.profileImage);
+        }
+      } catch (err) {
+        setError('Failed to load profile data');
+        console.error('Error loading profile:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadProfile();
+  }, [setValue]);
+
+  // Handle file upload
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setProfileImageFile(file);
+      setValue('profileImage', file);
+      
+      // Create preview URL for the new file
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setImagePreview(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Remove image
+  const removeImage = () => {
+    setProfileImageFile(null);
+    setValue('profileImage', null);
+    setImagePreview(profileData?.profileImage || null); // Reset to original image or null
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const onSubmit = async (data: ProfileFormData) => {
+    try {
+      setIsSubmitting(true);
+      setError(null);
+      
+      const updatedProfile = await profileApi.updateProfile({
+        name: data.name,
+        email: data.email,
+        profileImage: profileImageFile,
+      });
+      
+      // Update local state with the response
+      setProfileData(updatedProfile);
+      setImagePreview(updatedProfile.profileImage || null);
+      setProfileImageFile(null); // Clear the file since it's now uploaded
+      
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      
+      setIsSubmitted(true);
+      // Reset success message after 3 seconds
+      setTimeout(() => setIsSubmitted(false), 3000);
+    } catch (err) {
+      setError('Failed to update profile. Please try again.');
+      console.error('Error updating profile:', err);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -56,7 +158,16 @@ export default function ProfileForm() {
             <p className="text-white/80">Update your information</p>
           </div>
           
-          {isSubmitted ? (
+          {isLoading ? (
+            <div className="text-center py-8">
+              <div className="w-16 h-16 bg-blue-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-blue-400 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              </div>
+              <p className="text-white text-lg font-medium">Loading profile...</p>
+            </div>
+          ) : isSubmitted ? (
             <div className="text-center py-8">
               <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
                 <svg className="w-8 h-8 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -67,6 +178,74 @@ export default function ProfileForm() {
             </div>
           ) : (
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+              {/* Error Display */}
+              {error && (
+                <div className="bg-red-500/20 border border-red-500/30 rounded-lg p-4">
+                  <div className="flex items-center space-x-2">
+                    <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <p className="text-red-300 text-sm">{error}</p>
+                  </div>
+                </div>
+              )}
+
+                            {/* Profile Image Field */}
+                            <div>
+                <label className="block text-sm font-medium text-white/90 mb-2">
+                  Profile Image
+                </label>
+                
+                {/* Image Preview */}
+                {imagePreview && (
+                  <div className="mb-4 relative">
+                    <div className="w-24 h-24 rounded-full border-2 border-white/20 mx-auto overflow-hidden">
+                      <Image
+                        src={imagePreview}
+                        alt="Profile preview"
+                        width={96}
+                        height={96}
+                        className="w-full h-full object-cover"
+                        unoptimized={imagePreview.startsWith('blob:')}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={removeImage}
+                      className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center text-white text-xs transition-colors"
+                    >
+                      ×
+                    </button>
+                  </div>
+                )}
+
+                {/* File Upload */}
+                <div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/gif,image/webp"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                    id="file-upload"
+                  />
+                  <label
+                    htmlFor="file-upload"
+                    className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white/80 hover:bg-white/20 hover:text-white cursor-pointer transition-all duration-200 backdrop-blur-sm flex items-center justify-center space-x-2"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                    </svg>
+                    <span>{profileImageFile ? 'Change Image' : 'Upload Image'}</span>
+                  </label>
+                </div>
+
+                {errors.profileImage && (
+                  <p className="mt-1 text-sm text-red-300">{errors.profileImage.message}</p>
+                )}
+              </div>
+
+
               {/* Name Field */}
               <div>
                 <label htmlFor="name" className="block text-sm font-medium text-white/90 mb-2">
@@ -104,9 +283,19 @@ export default function ProfileForm() {
               {/* Submit Button */}
               <button
                 type="submit"
-                className="w-full py-3 px-4 bg-white/20 hover:bg-white/30 border border-white/30 hover:border-white/40 rounded-lg text-white font-medium transition-all duration-200 backdrop-blur-sm hover:shadow-lg hover:shadow-white/10 focus:outline-none focus:ring-2 focus:ring-white/30"
+                disabled={isSubmitting}
+                className="w-full py-3 px-4 bg-white/20 hover:bg-white/30 border border-white/30 hover:border-white/40 rounded-lg text-white font-medium transition-all duration-200 backdrop-blur-sm hover:shadow-lg hover:shadow-white/10 focus:outline-none focus:ring-2 focus:ring-white/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
               >
-                Update Profile
+                {isSubmitting ? (
+                  <>
+                    <svg className="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    <span>Updating...</span>
+                  </>
+                ) : (
+                  <span>Update Profile</span>
+                )}
               </button>
             </form>
           )}
